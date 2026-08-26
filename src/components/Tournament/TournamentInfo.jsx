@@ -13,14 +13,18 @@ function InfoRow({icon: Icon, label, value}) {
     );
 }
 
-function TournamentInfo({participantInfo, timeLeft}) {
+function TournamentInfo({participantInfo, timeLeft, isReadOnly = false, score = null}) {
     return (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3">
                 <p className="m-0 flex items-center gap-2 text-sm font-semibold text-slate-500">
-                    <Clock3 className="size-4"/> Time left
+                    {/* A review has no clock left to run; show what the run scored. */}
+                    {isReadOnly ? <Trophy className="size-4"/> : <Clock3 className="size-4"/>}
+                    {isReadOnly ? 'Your score' : 'Time left'}
                 </p>
-                <p className="m-0 font-mono text-2xl font-black text-slate-950">{timeLeft}</p>
+                <p className="m-0 font-mono text-2xl font-black text-slate-950">
+                    {isReadOnly ? `${score ?? 0}/${participantInfo?.tournament?.questionNumber ?? 0}` : timeLeft}
+                </p>
             </div>
             {participantInfo && (
                 <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">

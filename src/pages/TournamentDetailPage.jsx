@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {ArrowRight, CalendarClock, Clock3, Clipboard, FileQuestion, Trophy, Users, X} from 'lucide-react';
+import {ArrowRight, CalendarClock, Clock3, Clipboard, FileQuestion, Trophy, Users} from 'lucide-react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -24,44 +24,13 @@ function DetailItem({icon: Icon, label, value}) {
     );
 }
 
-function ReviewConfirmModal({open, onClose, onReview}) {
-    if (!open) return null;
-
-    return (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/50 px-4 py-4 sm:items-center">
-            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <h2 className="m-0 font-display text-2xl font-black text-slate-950">Tournament already finished</h2>
-                        <p className="m-0 mt-2 text-sm leading-relaxed text-slate-500">
-                            You can still review the questions and your submitted answers.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex size-10 cursor-pointer items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100"
-                        aria-label="Close review modal"
-                    >
-                        <X className="size-5"/>
-                    </button>
-                </div>
-                <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                    <Button variant="secondary" onClick={onClose}>No thanks</Button>
-                    <Button onClick={onReview}>Review questions</Button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 function TournamentDetailPage() {
     const {token} = useAuth();
     const [tournament, setTournament] = useState(null);
     const [loading, setLoading] = useState(true);
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [notice, setNotice] = useState(null);
-    const [reviewModalOpen, setReviewModalOpen] = useState(false);
+    const [participation, setParticipation] = useState(null);
     const {tournamentId} = useParams();
     const navigate = useNavigate();
 
@@ -91,9 +60,20 @@ function TournamentDetailPage() {
             }
         };
 
+        const fetchParticipation = async () => {
+            if (!token) return;
+            try {
+                const response = await api.get(`api/tournaments/${tournamentId}/get_participation_info/`);
+                setParticipation(response.data);
+            } catch {
+                setParticipation(null);  // 404 simply means "hasn't played this one"
+            }
+        };
+
         fetchTournamentDetail();
         fetchLeaderboard();
-    }, [tournamentId]);
+        fetchParticipation();
+    }, [tournamentId, token]);
 
     const handleStartTournament = async () => {
         if (!token) {
@@ -101,13 +81,16 @@ function TournamentDetailPage() {
             return;
         }
 
+        if (participation?.status === 'Completed') {
+            navigate(`/tournament/${tournamentId}/questions?readonly=true`);
+            return;
+        }
+
         try {
             const response = await api.post(`api/tournaments/${tournamentId}/join/`, {});
-            if (response.data.status === 'Active') {
-                navigate(`/tournament/${tournamentId}/questions/`);
-            } else {
-                setReviewModalOpen(true);
-            }
+            navigate(response.data.status === 'Completed'
+                ? `/tournament/${tournamentId}/questions?readonly=true`
+                : `/tournament/${tournamentId}/questions/`);
         } catch (error) {
             setNotice({type: 'error', text: error.response?.data?.error || 'Failed to start the tournament.'});
         }
@@ -149,6 +132,22 @@ function TournamentDetailPage() {
         ? dayjs.duration(convertDurationToSeconds(tournament.duration) * 1000).humanize()
         : 'Timed round';
 
+    const isEnded = tournament.status === 'ended';
+    const isUpcoming = tournament.status === 'upcoming';
+    const hasFinished = participation?.status === 'Completed';
+    const actionLabel = hasFinished
+        ? 'Review your answers'
+        : participation
+            ? 'Resume your round'
+            : isUpcoming
+                ? 'Not open yet'
+                : isEnded
+                    ? 'Tournament closed'
+                    : 'Join tournament';
+    // Someone who never played a closed round has nothing to open; someone who
+    // played it still gets their review.
+    const actionDisabled = !hasFinished && !participation && (isUpcoming || isEnded);
+
     return (
         <div className="sat-bubble-field min-h-[calc(100vh-4rem)] py-8 sm:py-12">
             <PageContainer>
@@ -181,8 +180,8 @@ function TournamentDetailPage() {
                             </div>
                             <div className="sat-score-strip px-5 py-5">
                                 <div className="flex flex-col gap-3 sm:flex-row">
-                                    <Button onClick={handleStartTournament} size="lg">
-                                        Join tournament <ArrowRight className="size-5"/>
+                                    <Button onClick={handleStartTournament} size="lg" disabled={actionDisabled}>
+                                        {actionLabel} <ArrowRight className="size-5"/>
                                     </Button>
                                     <Button type="button" onClick={copyShareLink} variant="secondary" size="lg">
                                         <Clipboard className="size-5"/> Share link
@@ -214,11 +213,6 @@ function TournamentDetailPage() {
                 </div>
             </PageContainer>
 
-            <ReviewConfirmModal
-                open={reviewModalOpen}
-                onClose={() => setReviewModalOpen(false)}
-                onReview={() => navigate(`/tournament/${tournamentId}/questions?readonly=true`)}
-            />
         </div>
     );
 }

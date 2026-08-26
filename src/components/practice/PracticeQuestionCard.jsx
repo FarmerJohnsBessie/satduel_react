@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Bookmark, Calculator, CheckCircle2, Flag, Highlighter, Pause, Play, RotateCcw, Timer, XCircle} from 'lucide-react';
+import {Bookmark, Calculator, CheckCircle2, Flag, Highlighter, MinusCircle, Pause, Play, RotateCcw, Timer, XCircle} from 'lucide-react';
 import {Button, ModalShell, Spinner, Textarea} from '../ui';
 import RenderWithMath from '../RenderWithMath';
 import api from '../api';
@@ -47,6 +47,9 @@ function PracticeQuestionCard({
     onSubmit,
     status = 'Blank',
     disabled = false,
+    // Force the solved layout (correct answer + explanation, no interaction) even
+    // on a Blank question — review needs it, a live round must never set it.
+    reveal = false,
     checking = false,
     submitOnSelect = false,
     submitLabel = 'Submit',
@@ -65,7 +68,7 @@ function PracticeQuestionCard({
 }) {
     const {user} = useAuth();
     const normalizedStatus = normalizeStatus(status);
-    const answered = normalizedStatus !== 'blank';
+    const answered = normalizedStatus !== 'blank' || reveal;
     const choices = getChoices(question);
     const [highlightOn, setHighlightOn] = useState(false);
     const [eliminatorOn, setEliminatorOn] = useState(false);
@@ -358,7 +361,7 @@ function PracticeQuestionCard({
                                     row = 'border-[#2FBF71] bg-[#EAF9F1]';
                                     bubble = 'bg-[#2FBF71] text-white';
                                     bubbleContent = '✓';
-                                } else if (isSelected && normalizedStatus === 'incorrect') {
+                                } else if (isSelected) {
                                     row = 'border-[#E85D5D] bg-[#FDEDED]';
                                     bubble = 'bg-[#E85D5D] text-white';
                                     bubbleContent = '✕';
@@ -420,18 +423,24 @@ function PracticeQuestionCard({
                             className={`mt-5 rounded-xl border px-4 py-3 ${
                                 normalizedStatus === 'correct'
                                     ? 'border-[#BFE8D2] bg-[#EAF9F1] text-[#1E9A5A]'
-                                    : 'border-[#F3C6C6] bg-[#FDF4F4] text-[#C24040]'
+                                    : normalizedStatus === 'blank'
+                                        ? 'border-[#E4E1D6] bg-[#F7F6F2] text-[#5A6376]'
+                                        : 'border-[#F3C6C6] bg-[#FDF4F4] text-[#C24040]'
                             }`}
                         >
                             <div className="flex items-center gap-2 font-semibold">
                                 {normalizedStatus === 'correct'
                                     ? <CheckCircle2 className="size-5"/>
-                                    : <XCircle className="size-5"/>}
-                                {normalizedStatus === 'correct'
-                                    ? 'Correct!'
-                                    : correctChoiceLabel
-                                        ? `Not quite. ${correctChoiceLabel} is the correct answer.`
-                                        : 'Not quite. Your answer was saved.'}
+                                    : normalizedStatus === 'blank'
+                                        ? <MinusCircle className="size-5"/>
+                                        : <XCircle className="size-5"/>}
+                                {normalizedStatus === 'correct' && 'Correct!'}
+                                {normalizedStatus === 'blank' && (correctChoiceLabel
+                                    ? `You skipped this. ${correctChoiceLabel} is the correct answer.`
+                                    : 'You skipped this question.')}
+                                {normalizedStatus === 'incorrect' && (correctChoiceLabel
+                                    ? `Not quite. ${correctChoiceLabel} is the correct answer.`
+                                    : 'Not quite. Your answer was saved.')}
                             </div>
                         </div>
                     )}

@@ -20,21 +20,26 @@ function Question({
     onTimerToggle,
     onTimerReset,
     allowSaving = false,
+    // Review surfaces set `reveal` to show the solution on questions the user
+    // never answered — skipping one is exactly when the explanation matters.
+    reveal = false,
+    // What the user picked, so review can mark their answer, not just the right one.
+    initialChoice = '',
 }) {
-    const [selectedChoice, setSelectedChoice] = useState('');
+    const [selectedChoice, setSelectedChoice] = useState(initialChoice);
     const [answerDetails, setAnswerDetails] = useState(null);
     const [checking, setChecking] = useState(false);
 
     useEffect(() => {
-        setSelectedChoice('');
+        setSelectedChoice(initialChoice);
         setAnswerDetails(null);
-    }, [questionData?.id]);
+    }, [questionData?.id, initialChoice]);
 
     useEffect(() => {
         let cancelled = false;
 
         const getAnswer = async () => {
-            if (!isAnswered(status) || !questionData?.id) return;
+            if ((!isAnswered(status) && !reveal) || !questionData?.id) return;
             try {
                 const response = await api.post('/api/get_answer/', {question_id: questionData.id});
                 if (!cancelled) {
@@ -51,7 +56,7 @@ function Question({
         return () => {
             cancelled = true;
         };
-    }, [questionData?.id, status]);
+    }, [questionData?.id, status, reveal]);
 
     const handleSubmit = async (choice) => {
         if (!choice || checking) return;
@@ -73,6 +78,7 @@ function Question({
             onSubmit={handleSubmit}
             status={status}
             disabled={disabled}
+            reveal={reveal}
             checking={checking}
             timerSeconds={timerSeconds}
             timerRunning={timerRunning}

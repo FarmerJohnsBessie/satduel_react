@@ -9,11 +9,22 @@ const STATUS_STYLES = {
     ended: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 
+// The API sends a Django duration ("00:20:00", or "1 02:00:00" past a day).
+function formatDuration(value) {
+    if (!value) return 'Timed round';
+    const [days, clock] = value.includes(' ') ? value.split(' ') : ['0', value];
+    const [hours, minutes] = clock.split(':').map(Number);
+    const parts = [];
+    if (Number(days)) parts.push(`${Number(days)}d`);
+    if (hours) parts.push(`${hours}h`);
+    if (minutes) parts.push(`${minutes}m`);
+    return parts.length ? parts.join(' ') : '<1m';
+}
+
 function TournamentCard({tournament}) {
     const navigate = useNavigate();
     const status = (tournament.status || 'active').toLowerCase();
     const participantCount = tournament.participantNumber ?? tournament.participants ?? 0;
-    const progress = Number(tournament.progress || 0);
 
     return (
         <Card hover className="sat-arena-card flex h-full flex-col overflow-hidden">
@@ -42,25 +53,13 @@ function TournamentCard({tournament}) {
                     </div>
                     <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
                         <Clock3 className="size-4 text-primary-600"/>
-                        {tournament.duration || 'Timed round'}
+                        {formatDuration(tournament.duration)}
                     </div>
                 </div>
 
-                {progress > 0 && (
-                    <div className="mt-4">
-                        <div className="flex items-center justify-between text-xs font-black uppercase text-slate-400">
-                            <span>Progress</span>
-                            <span>{Math.min(100, progress)}%</span>
-                        </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                            <div className="h-full rounded-full bg-primary-600" style={{width: `${Math.min(100, progress)}%`}}/>
-                        </div>
-                    </div>
-                )}
-
                 <div className="mt-6">
                     <Button onClick={() => navigate(`/tournament/${tournament.id}`)} block>
-                        {status === 'upcoming' ? 'View tournament' : 'Enter tournament'} <ArrowRight className="size-4"/>
+                        {status === 'active' ? 'Enter tournament' : 'View tournament'} <ArrowRight className="size-4"/>
                     </Button>
                 </div>
             </div>
