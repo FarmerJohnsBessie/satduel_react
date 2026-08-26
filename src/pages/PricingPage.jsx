@@ -2,7 +2,8 @@ import React, {useEffect, useState} from 'react';
 import {Link, useSearchParams} from 'react-router-dom';
 import {ArrowRight, Check, Crown, Lock} from 'lucide-react';
 import api from '../components/api';
-import {Alert, PageContainer, Spinner} from '../components/ui';
+import {Alert, PageContainer} from '../components/ui';
+import {Cta, EYEBROW, PANEL} from '../components/ui/landing';
 import {DISCORD_INVITE, DiscordIcon} from '../components/Discord';
 import {useAuth} from '../context/AuthContext';
 import {billingErrorMessage, openBillingPortal, startPremiumCheckout} from '../utils/billing';
@@ -128,34 +129,6 @@ const FAQS = [
         answer: 'From the billing portal in your settings, any time. Checkout, invoices and cancellation are all handled by Stripe.',
     },
 ];
-
-const EYEBROW = 'sd-mono m-0 text-[11px] font-bold tracking-[0.12em]';
-const PANEL = 'rounded-[20px] border border-[var(--sd-line2)] bg-[var(--sd-panel)]';
-// Both CTAs carry a 1.5px border so the solid and outline variants share a box
-// height wherever they sit side by side.
-const CTA_BASE = 'flex items-center justify-center gap-2 rounded-xl border-[1.5px] font-bold no-underline transition-colors';
-const CTA_SOLID = `${CTA_BASE} border-transparent bg-[#7C5CF0] text-white shadow-[0_6px_20px_rgba(124,92,240,0.4)] hover:bg-[#9678FF]`;
-const CTA_OUTLINE = `${CTA_BASE} border-[var(--sd-line3)] text-[var(--sd-body)] hover:border-[#A78BFA] hover:text-[var(--sd-text)]`;
-
-// Landing-zone CTA: the ui-kit Button is the app-shell primitive (slate palette,
-// chunky 3D shadow) and reads wrong inside .sd-landing.
-function Cta({solid = false, to, href, onClick, loading = false, className = '', children}) {
-    const classes = `${solid ? CTA_SOLID : CTA_OUTLINE} ${className}`;
-    const content = (
-        <>
-            {loading && <Spinner className="size-4 border-2"/>}
-            {children}
-        </>
-    );
-
-    if (to) return <Link to={to} className={classes}>{content}</Link>;
-    if (href) return <a href={href} className={classes} target="_blank" rel="noopener noreferrer">{content}</a>;
-    return (
-        <button type="button" onClick={onClick} disabled={loading} className={`${classes} cursor-pointer disabled:opacity-60`}>
-            {content}
-        </button>
-    );
-}
 
 function FeatureRow({children, premium = false}) {
     return (
