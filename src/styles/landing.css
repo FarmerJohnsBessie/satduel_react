@@ -29,6 +29,10 @@
     --sd-gold-lbl: #E9BC4F;
     --sd-green-lbl: #2FBF71;
     --sd-orange-lbl: #F08A3E;
+    /* Discord blurple, for community/offer callouts */
+    --sd-blurple: #5865F2;
+    --sd-blurple-lbl: #7B87FF;
+    --sd-blurple-wash: rgba(88, 101, 242, 0.1);
 
     font-family: 'Archivo', sans-serif;
     background: var(--sd-bg);
@@ -59,6 +63,8 @@
     --sd-gold-lbl: #A16E14;
     --sd-green-lbl: #1E9A5A;
     --sd-orange-lbl: #C2611D;
+    --sd-blurple-lbl: #4E5BD8;
+    --sd-blurple-wash: rgba(88, 101, 242, 0.07);
 }
 
 .sd-display { font-family: 'Space Grotesk', sans-serif; }

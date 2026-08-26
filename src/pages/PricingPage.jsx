@@ -1,150 +1,277 @@
 import React, {useEffect, useState} from 'react';
 import {Link, useSearchParams} from 'react-router-dom';
-import {
-    ArrowRight,
-    Check,
-    CircleDot,
-    CreditCard,
-    Crown,
-    FileText,
-    Gauge,
-    Lock,
-    PartyPopper,
-    Sparkles,
-    Target,
-    Trophy,
-    Zap,
-} from 'lucide-react';
+import {ArrowRight, Check, Crown, Lock} from 'lucide-react';
 import api from '../components/api';
-import {Alert, Button, Card, PageContainer} from '../components/ui';
+import {Alert, PageContainer, Spinner} from '../components/ui';
+import {DISCORD_INVITE, DiscordIcon} from '../components/Discord';
 import {useAuth} from '../context/AuthContext';
 import {billingErrorMessage, openBillingPortal, startPremiumCheckout} from '../utils/billing';
 import SEO, {breadcrumbJsonLd, faqJsonLd, softwareAppJsonLd} from '../components/SEO';
+import '../styles/landing.css';
 
-// Every line below maps to a real gate in the code. Keep it that way — this is
+// ponytail: one flag runs the whole promo — the offer band, its FAQ answer and
+// the structured data all hang off it. Flip to false when it ends.
+const OFFER_ACTIVE = true;
+// Optional end date, e.g. 'September 30'. Left empty, the sentence is omitted
+// rather than shipping a placeholder to production.
+const OFFER_ENDS = '';
+
+// Every row below maps to a real gate in the code. Keep it that way — this is
 // the page people pay from.
 //   daily cap ......... settings.FREE_DAILY_LIMIT (25)
 //   topic selection ... api/views/practice_views.py filters_are_default()
-//   party sizes ....... api/views/party_views.py CAPS
+//   math lessons ...... src/pages/StudyGuidePage.jsx isLocked() (free: first 3)
+//   premium forms ..... PracticeTest.premium_only
+//   party caps ........ api/views/party_views.py CAPS (6/20 vs 50/50)
 //   gold rush pool .... api/views/party_views.py GOLD_POOL (30 vs 100)
-//   math guides ....... src/pages/StudyGuidePage.jsx isLocked()
+//   duel reactions .... api/models.py FREE_DUEL_EMOJIS (30) + PREMIUM (10)
 //   crown ............. RankingPage / ProfilePage render it off is_premium
+const COMPARISON = [
+    {
+        group: 'Practice',
+        rows: [
+            {
+                label: 'Adaptive practice questions',
+                note: 'The core English and Math loop',
+                free: '25 / day',
+                premium: 'Unlimited',
+            },
+            {
+                label: 'Topic selection',
+                note: 'Drill one skill instead of a random mix',
+                free: 'Random mix',
+                premium: 'Any topic',
+            },
+            {label: 'Practice Elo and progress tracking', free: true, premium: true},
+        ],
+    },
+    {
+        group: 'Study guides',
+        rows: [
+            {label: 'Reading & Writing lessons', free: 'All', premium: 'All'},
+            {label: 'Math lessons', free: 'First 3', premium: 'All'},
+        ],
+    },
+    {
+        group: 'Practice tests',
+        rows: [
+            {label: 'Free full-length forms', free: true, premium: true},
+            {
+                label: 'Premium-only forms',
+                note: 'Extra test forms beyond the free set',
+                free: false,
+                premium: true,
+            },
+        ],
+    },
+    {
+        group: 'Party mode (as host)',
+        rows: [
+            {
+                label: 'Players per room',
+                note: 'Guests never need Premium to join',
+                free: '6',
+                premium: '50',
+            },
+            {label: 'Questions per game', free: '20', premium: '50'},
+            {
+                label: 'Gold Rush question pool',
+                note: 'A bigger pool means far fewer repeats',
+                free: '30',
+                premium: '100',
+            },
+        ],
+    },
+    {
+        group: 'Duels & profile',
+        rows: [
+            {label: 'Ranked duels and tournaments', free: true, premium: true},
+            {label: 'Duel reactions', free: '30', premium: '40'},
+            {label: 'Crown on your profile and the leaderboard', free: false, premium: 'crown'},
+        ],
+    },
+];
+
 const FREE_FEATURES = [
-    '25 adaptive practice questions each day',
-    'Random topic mix from the SAT bank',
-    'Party rooms with up to 6 friends, 20 questions a game',
-    'Duels, tournaments, and free practice-test forms',
-    'Every Reading and Writing study guide lesson',
+    '25 adaptive practice questions a day',
+    'Ranked duels, tournaments and the diagnostic',
+    'Party rooms with up to 6 players',
+    'Free full-length practice test forms',
+    'The whole Reading & Writing study guide',
 ];
 
 const PREMIUM_FEATURES = [
-    'Unlimited adaptive practice — no daily cap',
-    'Choose the exact SAT topics you drill',
-    'Party rooms up to 50 players and 50 questions a game',
-    'A deeper Gold Rush pool, so questions repeat far less',
-    'Premium-only practice tests and reaction pack',
-    'The complete Math study guide library',
-    'A Premium crown on your profile and the leaderboard',
+    <><strong className="font-bold text-[var(--sd-text)]">Unlimited</strong> practice questions — no daily cap</>,
+    <>Pick the <strong className="font-bold text-[var(--sd-text)]">exact topics</strong> you drill</>,
+    <>Party rooms for <strong className="font-bold text-[var(--sd-text)]">50 players</strong>, 50 questions a game</>,
+    'Premium-only practice test forms',
+    'The full Math study guide library and the profile crown',
 ];
 
-const SCORE_SIGNALS = [
-    {label: 'Practice Elo', value: 'Live'},
-    {label: 'Daily cap', value: 'None'},
-    {label: 'Topics', value: 'Pick'},
-];
+const PROMO_FAQ = {
+    question: 'How do I use the Discord promo code?',
+    answer: 'Copy the code from #announcements in the Discord, click Start Premium, then paste it into the promo code field on the Stripe checkout page. Your first month is free and billing starts after that.',
+};
 
 const FAQS = [
+    ...(OFFER_ACTIVE ? [PROMO_FAQ] : []),
     {
         question: 'Can I keep using SAT Duel for free?',
-        answer: 'Yes, and free is genuinely usable. You get 25 questions a day, the diagnostic, duels, tournaments, free practice-test forms, party rooms up to six players, and the whole Reading and Writing study guide.',
+        answer: 'Yes, and free is genuinely usable: 25 questions a day, the diagnostic, duels, tournaments, free practice-test forms, party rooms up to six players, and the whole Reading & Writing study guide.',
     },
     {
-        question: 'What does Premium unlock first?',
-        answer: 'The daily cap disappears and you can pick exact topics to drill. You also unlock Premium practice tests, extra reactions, and party rooms for up to 50 players.',
+        question: 'Do my friends need Premium to play with me?',
+        answer: 'No. Only the host plan sets the room size and question count. Guests join a 50-player room on a free account.',
     },
     {
-        question: 'Does Premium change party games?',
-        answer: 'Yes. A Premium host can run a room for up to 50 players with up to 50 questions, and Gold Rush draws from a much larger pool so questions repeat far less over a long game. Guests never need Premium to join.',
-    },
-    {
-        question: 'Where are payments handled?',
-        answer: 'Checkout, invoices, and subscription management are handled by Stripe. You can cancel any time from the billing portal.',
+        question: 'How do I cancel?',
+        answer: 'From the billing portal in your settings, any time. Checkout, invoices and cancellation are all handled by Stripe.',
     },
 ];
 
-function FeatureList({items, premium = false}) {
+const EYEBROW = 'sd-mono m-0 text-[11px] font-bold tracking-[0.12em]';
+const PANEL = 'rounded-[20px] border border-[var(--sd-line2)] bg-[var(--sd-panel)]';
+// Both CTAs carry a 1.5px border so the solid and outline variants share a box
+// height wherever they sit side by side.
+const CTA_BASE = 'flex items-center justify-center gap-2 rounded-xl border-[1.5px] font-bold no-underline transition-colors';
+const CTA_SOLID = `${CTA_BASE} border-transparent bg-[#7C5CF0] text-white shadow-[0_6px_20px_rgba(124,92,240,0.4)] hover:bg-[#9678FF]`;
+const CTA_OUTLINE = `${CTA_BASE} border-[var(--sd-line3)] text-[var(--sd-body)] hover:border-[#A78BFA] hover:text-[var(--sd-text)]`;
+
+// Landing-zone CTA: the ui-kit Button is the app-shell primitive (slate palette,
+// chunky 3D shadow) and reads wrong inside .sd-landing.
+function Cta({solid = false, to, href, onClick, loading = false, className = '', children}) {
+    const classes = `${solid ? CTA_SOLID : CTA_OUTLINE} ${className}`;
+    const content = (
+        <>
+            {loading && <Spinner className="size-4 border-2"/>}
+            {children}
+        </>
+    );
+
+    if (to) return <Link to={to} className={classes}>{content}</Link>;
+    if (href) return <a href={href} className={classes} target="_blank" rel="noopener noreferrer">{content}</a>;
     return (
-        <ul className="m-0 space-y-3 p-0">
-            {items.map((item) => (
-                <li key={item} className="flex items-start gap-3 text-sm leading-relaxed text-slate-600">
-                    <span
-                        className={[
-                            'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full',
-                            premium ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-500',
-                        ].join(' ')}
-                    >
-                        <Check className="size-3.5"/>
-                    </span>
-                    <span>{item}</span>
-                </li>
-            ))}
-        </ul>
+        <button type="button" onClick={onClick} disabled={loading} className={`${classes} cursor-pointer disabled:opacity-60`}>
+            {content}
+        </button>
     );
 }
 
-function ScoreSlip() {
+function FeatureRow({children, premium = false}) {
     return (
-        <Card className="sat-arena-card overflow-hidden rounded-[1.75rem] bg-white/95">
-            <div className="border-b border-slate-200 bg-slate-950 px-5 py-4 text-white">
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <p className="m-0 text-xs font-black uppercase text-cyan-200">Premium round</p>
-                        <h2 className="m-0 mt-1 font-display text-xl font-black">Unlock the full arena</h2>
-                    </div>
-                    <div className="flex size-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10">
-                        <Crown className="size-6 text-amber-300"/>
-                    </div>
-                </div>
+        <li className="flex items-start gap-3 text-[14.5px] leading-normal text-[var(--sd-body)]">
+            <span
+                className={[
+                    'mt-px flex size-[18px] shrink-0 items-center justify-center rounded-full',
+                    premium
+                        ? 'bg-[rgba(124,92,240,0.18)] text-[var(--sd-violet-lbl)]'
+                        : 'bg-[var(--sd-line)] text-[var(--sd-mut2)]',
+                ].join(' ')}
+            >
+                <Check className="size-3" strokeWidth={3.4}/>
+            </span>
+            <span>{children}</span>
+        </li>
+    );
+}
+
+// The temporary promo. Delete this component and OFFER_ACTIVE together when the
+// offer is retired for good.
+function OfferBand() {
+    return (
+        <div className="mt-9 flex flex-col gap-5 rounded-[18px] border border-[rgba(88,101,242,0.38)] bg-[var(--sd-blurple-wash)] p-6 sm:flex-row sm:items-center sm:gap-7 sm:px-7">
+            <span className="flex size-[52px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--sd-blurple)] text-white">
+                <DiscordIcon className="size-7"/>
+            </span>
+
+            <div className="min-w-0 grow">
+                <p className={`${EYEBROW} text-[var(--sd-blurple-lbl)]`}>LIMITED TIME OFFER</p>
+                <p className="sd-display m-0 mt-2 text-[21px] font-bold tracking-[-0.01em] text-[var(--sd-text)]">
+                    Your first month of Premium, free.
+                </p>
+                <p className="m-0 mt-1.5 text-[14.5px] leading-relaxed text-[var(--sd-mut)] text-pretty">
+                    Join the SAT Duel Discord, grab this month&rsquo;s promo code from #announcements, and paste it
+                    into the promo field at checkout.{OFFER_ENDS ? ` Ends ${OFFER_ENDS}.` : ''}
+                </p>
             </div>
 
-            <div className="p-5">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="m-0 text-xs font-black uppercase text-slate-400">Best for</p>
-                    <p className="m-0 mt-2 text-[15px] font-semibold leading-relaxed text-slate-800">
-                        Students who already know SAT Duel works for them and want longer, more focused practice sessions.
+            <div className="flex shrink-0 flex-col gap-2.5">
+                <span className="sd-mono flex items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-dashed border-[var(--sd-line3)] px-4 py-2.5 text-[13px] font-bold tracking-[0.14em] text-[var(--sd-dim)]">
+                    <Lock className="size-3.5"/> SATDUEL-&bull;&bull;&bull;&bull;
+                </span>
+                <Cta solid href={DISCORD_INVITE} className="whitespace-nowrap !bg-[var(--sd-blurple)] px-5 py-3 text-[15px] !shadow-none hover:!bg-[#4752C4]">
+                    Join the Discord <ArrowRight className="size-4"/>
+                </Cta>
+            </div>
+        </div>
+    );
+}
+
+const GRID_COLS = 'grid grid-cols-[minmax(0,1fr)_88px_88px] sm:grid-cols-[minmax(0,1fr)_190px_190px]';
+const CELL = 'flex items-center justify-center border-l border-[var(--sd-line)] px-2 py-4 sm:px-3';
+const CELL_VALUE = 'sd-mono text-center text-xs font-bold sm:text-[13.5px]';
+
+function ComparisonCell({value, premium = false}) {
+    const tint = premium ? 'bg-[rgba(124,92,240,0.08)]' : '';
+
+    if (value === 'crown') {
+        return <div className={`${CELL} ${tint} text-[var(--sd-gold-lbl)]`}><Crown className="size-[18px]" strokeWidth={1.9}/></div>;
+    }
+    if (value === true) {
+        return <div className={`${CELL} ${tint} text-[var(--sd-green-lbl)]`}><Check className="size-[17px]" strokeWidth={3}/></div>;
+    }
+    if (value === false) {
+        return <div className={`${CELL} ${tint} text-[17px] font-bold text-[var(--sd-dim)]`}>&mdash;</div>;
+    }
+    return (
+        <div className={`${CELL} ${tint}`}>
+            <span className={`${CELL_VALUE} ${premium ? 'text-[var(--sd-violet-lbl)]' : 'text-[var(--sd-mut)]'}`}>{value}</span>
+        </div>
+    );
+}
+
+function ComparisonTable() {
+    return (
+        <div className={`mt-7 overflow-hidden ${PANEL}`}>
+            <div className={`${GRID_COLS} bg-[var(--sd-head)]`}>
+                <div className="px-4 py-4 sm:px-6"/>
+                <div className="border-l border-white/10 px-2 py-4 text-center sm:px-5">
+                    <p className={`${EYEBROW} text-[#8595AE]`}>FREE</p>
+                    <p className="sd-display m-0 mt-1.5 text-base font-bold text-white sm:text-[19px]">$0</p>
+                </div>
+                <div className="border-l border-white/10 bg-[rgba(124,92,240,0.16)] px-2 py-4 text-center sm:px-5">
+                    <p className={`${EYEBROW} text-[#C0B0FA]`}>PREMIUM</p>
+                    <p className="sd-display m-0 mt-1.5 text-base font-bold text-white sm:text-[19px]">
+                        $9.99<span className="text-xs font-medium text-[#AEB7CC]"> /mo</span>
                     </p>
                 </div>
+            </div>
 
-                <div className="mt-4 grid grid-cols-4 gap-2">
-                    {['A', 'B', 'C', 'D'].map((choice, index) => (
-                        <div key={choice} className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white py-3">
-                            <span
-                                className={[
-                                    'flex size-9 items-center justify-center rounded-full text-sm font-black',
-                                    index === 2
-                                        ? 'sat-answer-bubble-filled text-white'
-                                        : 'sat-answer-bubble bg-white text-slate-500',
-                                ].join(' ')}
-                            >
-                                {choice}
-                            </span>
-                            <span className="text-xs font-black uppercase text-slate-400">
-                                {index === 2 ? 'Drill' : 'Mix'}
-                            </span>
+            {COMPARISON.map((section) => (
+                <React.Fragment key={section.group}>
+                    <div className={`${GRID_COLS} border-t border-[var(--sd-line)] bg-[var(--sd-bg2)]`}>
+                        <div className="px-4 py-3 sm:px-6">
+                            <span className={`${EYEBROW} text-[var(--sd-dim)]`}>{section.group.toUpperCase()}</span>
+                        </div>
+                        <div className="border-l border-[var(--sd-line)]"/>
+                        <div className="border-l border-[var(--sd-line)]"/>
+                    </div>
+
+                    {section.rows.map((row) => (
+                        <div key={row.label} className={`${GRID_COLS} border-t border-[var(--sd-line)]`}>
+                            <div className="px-4 py-4 sm:px-6">
+                                <span className="text-sm font-semibold text-[var(--sd-text)] sm:text-[15px]">{row.label}</span>
+                                {row.note && (
+                                    <span className="mt-0.5 hidden text-[13px] text-[var(--sd-dim)] sm:block">{row.note}</span>
+                                )}
+                            </div>
+                            <ComparisonCell value={row.free}/>
+                            <ComparisonCell value={row.premium} premium/>
                         </div>
                     ))}
-                </div>
-            </div>
-
-            <div className="sat-score-strip grid grid-cols-3 divide-x divide-white/70 px-5 py-4 text-center">
-                {SCORE_SIGNALS.map((signal) => (
-                    <div key={signal.label}>
-                        <p className="m-0 text-xs font-black uppercase text-slate-500">{signal.label}</p>
-                        <p className="m-0 mt-1 font-display text-xl font-black text-slate-950">{signal.value}</p>
-                    </div>
-                ))}
-            </div>
-        </Card>
+                </React.Fragment>
+            ))}
+        </div>
     );
 }
 
@@ -214,6 +341,29 @@ function PricingPage() {
         }
     };
 
+    const premiumCta = () => {
+        if (loading) return <Cta solid loading className="px-5 py-3.5 text-[15px]">Loading account</Cta>;
+        if (isPremium) {
+            return (
+                <Cta onClick={handleManageBilling} loading={billingAction === 'portal'} className="px-5 py-3.5 text-[15px]">
+                    Manage billing
+                </Cta>
+            );
+        }
+        if (user) {
+            return (
+                <Cta solid onClick={handleUpgrade} loading={billingAction === 'checkout'} className="px-5 py-3.5 text-[15px]">
+                    Start Premium <ArrowRight className="size-[17px]"/>
+                </Cta>
+            );
+        }
+        return (
+            <Cta solid to="/register" className="px-5 py-3.5 text-[15px]">
+                Start Premium <ArrowRight className="size-[17px]"/>
+            </Cta>
+        );
+    };
+
     return (
         <div>
             <SEO
@@ -228,206 +378,147 @@ function PricingPage() {
                 ]}
             />
 
-            <section className="sd-hero-bg overflow-hidden border-b border-[var(--sd-line)]">
-                <PageContainer className="py-10 sm:py-12">
-                    <div className="mx-auto max-w-3xl text-center">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(124,92,240,0.45)] bg-[rgba(124,92,240,0.12)] px-4 py-2 text-sm font-black text-[var(--sd-violet-lbl)]">
-                            <Sparkles className="size-4"/> SAT Duel Premium
-                        </span>
-                        <h1 className="m-0 mt-5 font-display text-4xl font-black leading-tight text-[var(--sd-text)] sm:text-5xl">
-                            Free forever. $9.99/month to go unlimited.
+            {/* hero */}
+            <section className="sd-hero-bg border-b border-[var(--sd-line)]">
+                <PageContainer className="pb-14 pt-12 sm:pt-[76px]">
+                    <div className="max-w-3xl">
+                        <p className={`${EYEBROW} text-[var(--sd-violet-lbl)]`}>PRICING</p>
+                        <h1 className="sd-display m-0 mt-4 text-4xl font-bold leading-[1.06] tracking-[-0.02em] text-[var(--sd-text)] sm:text-[54px]">
+                            Free forever.<br className="hidden sm:block"/> Premium when you outgrow it.
                         </h1>
-                        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-[var(--sd-mut)]">
-                            Free gives you 25 adaptive questions a day plus duels, tournaments, free practice tests, and party rooms. Premium removes the daily cap, unlocks exclusive tests and reactions, and scales your party rooms to a full classroom.
+                        <p className="m-0 mt-5 max-w-[620px] text-[17px] leading-relaxed text-[var(--sd-mut)] text-pretty">
+                            Free gives you 25 adaptive questions a day, duels, tournaments and party rooms. Premium
+                            removes the daily cap, lets you drill the exact topics you are weak on, and scales
+                            everything else up.
                         </p>
-                        <div className="mt-6 flex flex-wrap justify-center gap-2">
-                            {['Unlimited practice', 'Premium tests', '50-player parties', 'Cancel anytime'].map((label) => (
-                                <span key={label} className="rounded-full border border-[var(--sd-line2)] bg-[var(--sd-panel)] px-3 py-1.5 text-sm font-black text-[var(--sd-mut2)]">
-                                    {label}
-                                </span>
-                            ))}
-                        </div>
                     </div>
 
-                    {notice && (
-                        <div className="mx-auto mt-6 max-w-3xl">
-                            <Alert type={notice.type}>{notice.text}</Alert>
-                        </div>
-                    )}
-
-                    <div className="mx-auto mt-8 grid max-w-5xl gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                        {/* Premium lists more features, so the grid row is taller than
-                            this card's content — grow the body to keep the CTA on the floor. */}
-                        <Card className="sat-arena-card flex flex-col overflow-hidden">
-                            <div className="flex-1 p-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex size-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
-                                        <Zap className="size-5"/>
-                                    </div>
-                                    <div>
-                                        <p className="m-0 text-xs font-black uppercase text-slate-400">Starter lane</p>
-                                        <h2 className="m-0 mt-1 text-xl font-black text-slate-950">Free</h2>
-                                    </div>
-                                </div>
-
-                                <div className="mt-7 flex items-end gap-2">
-                                    <span className="font-display text-5xl font-black text-slate-950">$0</span>
-                                    <span className="pb-1 text-sm font-bold text-slate-500">forever</span>
-                                </div>
-
-                                <p className="m-0 mt-3 text-sm leading-relaxed text-slate-500">
-                                    Enough to try the loop and build a daily SAT habit.
-                                </p>
-
-                                <div className="mt-6">
-                                    <FeatureList items={FREE_FEATURES}/>
-                                </div>
-                            </div>
-
-                            <div className="sat-score-strip px-6 py-5">
-                                <Button to={user ? '/trainer' : '/register'} variant="secondary" block>
-                                    {user ? 'Continue free practice' : 'Create a free account'}
-                                </Button>
-                            </div>
-                        </Card>
-
-                        <Card className="sat-arena-card overflow-hidden border-primary-300">
-                            <div className="border-b border-primary-200 bg-slate-950 p-6 text-white">
-                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex size-12 items-center justify-center rounded-2xl bg-white/10 text-amber-300">
-                                            <Crown className="size-6"/>
-                                        </div>
-                                        <div>
-                                            <p className="m-0 text-xs font-black uppercase text-cyan-200">Focused lane</p>
-                                            <h2 className="m-0 mt-1 text-2xl font-black text-white">Premium</h2>
-                                        </div>
-                                    </div>
-                                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-primary-500 px-3 py-1 text-xs font-black text-white">
-                                        <CircleDot className="size-3.5"/> Most focused
-                                    </span>
-                                </div>
-
-                                <div className="mt-7 flex items-end gap-2">
-                                    <span className="font-display text-5xl font-black text-white">$9.99</span>
-                                    <span className="pb-1 text-sm font-bold text-slate-300">USD / month</span>
-                                </div>
-                            </div>
-
-                            <div className="p-6">
-                                <FeatureList items={PREMIUM_FEATURES} premium/>
-
-                                <div className="mt-7">
-                                    {loading ? (
-                                        <Button block loading>Loading account</Button>
-                                    ) : isPremium ? (
-                                        <Button block variant="secondary" onClick={handleManageBilling} loading={billingAction === 'portal'}>
-                                            <CreditCard className="size-4"/> Manage billing
-                                        </Button>
-                                    ) : user ? (
-                                        <Button block onClick={handleUpgrade} loading={billingAction === 'checkout'}>
-                                            Start secure checkout <ArrowRight className="size-4"/>
-                                        </Button>
-                                    ) : (
-                                        <Button to="/register" block>
-                                            Create account to upgrade <ArrowRight className="size-4"/>
-                                        </Button>
-                                    )}
-                                </div>
-
-                                <p className="m-0 mt-4 flex items-center gap-2 text-sm text-slate-400">
-                                    <Lock className="size-4"/> Secure checkout and invoices are handled by Stripe.
-                                </p>
-                                <p className="m-0 mt-2 text-xs leading-5 text-slate-400">
-                                    By upgrading, you agree to the{' '}
-                                    <Link to="/terms" className="font-semibold text-slate-500 hover:text-primary-600">Terms</Link>
-                                    {' '}and{' '}
-                                    <Link to="/refund-policy" className="font-semibold text-slate-500 hover:text-primary-600">Refund Policy</Link>.
-                                </p>
-                            </div>
-                        </Card>
-                    </div>
+                    {notice && <div className="mt-6 max-w-3xl"><Alert type={notice.type}>{notice.text}</Alert></div>}
                 </PageContainer>
             </section>
 
-            <PageContainer className="py-12 sm:py-16">
-                <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-                    <div>
-                        <p className="m-0 text-xs font-black uppercase text-[var(--sd-violet-lbl)]">Why upgrade</p>
-                        <h2 className="m-0 mt-3 font-display text-3xl font-black leading-tight text-[var(--sd-text)] sm:text-4xl">
-                            More reps, aimed better, with more friends.
-                        </h2>
-                        <p className="m-0 mt-4 text-lg leading-relaxed text-[var(--sd-mut)]">
-                            The 25-question daily cap goes away, you pick the topics you drill instead of taking a random mix, and your party rooms grow from 6 players to 50. Free test forms stay open to everyone; Premium adds exclusive forms and reactions.
+            <PageContainer>
+                {OFFER_ACTIVE && <OfferBand/>}
+
+                {/* plans */}
+                <div className="mt-10 grid gap-6 lg:grid-cols-2">
+                    <div className={`flex flex-col p-7 sm:p-[30px] ${PANEL}`}>
+                        <p className={`${EYEBROW} text-[var(--sd-dim)]`}>FREE</p>
+                        <div className="mt-4 flex items-end gap-2">
+                            <span className="sd-display text-[46px] font-bold leading-none tracking-[-0.02em] text-[var(--sd-text)]">$0</span>
+                            <span className="pb-1.5 text-sm font-semibold text-[var(--sd-dim)]">forever</span>
+                        </div>
+                        <p className="m-0 mt-3.5 text-[14.5px] leading-relaxed text-[var(--sd-mut)]">
+                            Everything you need to build a daily SAT habit.
                         </p>
+
+                        <ul className="m-0 mt-6 flex list-none flex-col gap-3 border-t border-[var(--sd-line)] p-0 pt-6">
+                            {FREE_FEATURES.map((item) => <FeatureRow key={item}>{item}</FeatureRow>)}
+                        </ul>
+
+                        <div className="grow"/>
+                        <Cta to={user ? '/trainer' : '/register'} className="mt-7 px-5 py-3.5 text-[15px]">
+                            {user ? 'Continue free practice' : 'Create a free account'}
+                        </Cta>
                     </div>
 
-                    <div className="hidden lg:block">
-                        <ScoreSlip/>
+                    <div className={`flex flex-col border-[1.5px] border-[#7C5CF0] p-7 shadow-[0_18px_50px_rgba(124,92,240,0.18)] sm:p-[30px] ${PANEL}`}>
+                        <div className="flex items-center justify-between gap-4">
+                            <p className={`${EYEBROW} flex items-center gap-2 text-[var(--sd-violet-lbl)]`}>
+                                <Crown className="size-[15px] text-[var(--sd-gold-lbl)]" strokeWidth={1.9}/> PREMIUM
+                            </p>
+                            <span className="rounded-full bg-[#7C5CF0] px-2.5 py-1 text-[11.5px] font-bold text-white">
+                                Full access
+                            </span>
+                        </div>
+
+                        <div className="mt-4 flex items-end gap-2">
+                            <span className="sd-display text-[46px] font-bold leading-none tracking-[-0.02em] text-[var(--sd-text)]">$9.99</span>
+                            <span className="pb-1.5 text-sm font-semibold text-[var(--sd-dim)]">per month, USD</span>
+                        </div>
+                        <p className="m-0 mt-3.5 text-[14.5px] leading-relaxed text-[var(--sd-mut)]">
+                            For the days when 25 questions are not enough.
+                        </p>
+
+                        <ul className="m-0 mt-6 flex list-none flex-col gap-3 border-t border-[var(--sd-line)] p-0 pt-6">
+                            {PREMIUM_FEATURES.map((item, index) => (
+                                <FeatureRow key={index} premium>{item}</FeatureRow>
+                            ))}
+                        </ul>
+
+                        <div className="grow"/>
+                        <div className="mt-7">{premiumCta()}</div>
+                        <p className="m-0 mt-3 flex items-center justify-center gap-1.5 text-[12.5px] text-[var(--sd-dim)]">
+                            <Lock className="size-3.5"/> Secure checkout by Stripe &middot; Cancel anytime
+                        </p>
+                        <p className="m-0 mt-2 text-center text-[12.5px] text-[var(--sd-dim)]">
+                            <Link to="/terms" className="font-semibold text-[var(--sd-dim)] hover:text-[var(--sd-violet-lbl)]">Terms</Link>
+                            {' '}&middot;{' '}
+                            <Link to="/refund-policy" className="font-semibold text-[var(--sd-dim)] hover:text-[var(--sd-violet-lbl)]">Refund policy</Link>
+                        </p>
                     </div>
                 </div>
 
-                <div className="mx-auto mt-10 grid max-w-5xl gap-4 md:grid-cols-3">
-                    <Card className="sat-arena-card p-5">
-                        <Gauge className="mb-4 size-7 text-primary-600"/>
-                        <h3 className="m-0 font-display text-lg font-black text-slate-950">Cap removed</h3>
-                        <p className="m-0 mt-2 text-sm leading-relaxed text-slate-600">
-                            Keep practicing after your free daily questions when momentum is high.
-                        </p>
-                    </Card>
-                    <Card className="sat-arena-card p-5">
-                        <Target className="mb-4 size-7 text-cyan-700"/>
-                        <h3 className="m-0 font-display text-lg font-black text-slate-950">Skill targeting</h3>
-                        <p className="m-0 mt-2 text-sm leading-relaxed text-slate-600">
-                            Choose the topics you actually need instead of waiting for random practice to find them.
-                        </p>
-                    </Card>
-                    <Card className="sat-arena-card p-5">
-                        <PartyPopper className="mb-4 size-7 text-emerald-700"/>
-                        <h3 className="m-0 font-display text-lg font-black text-slate-950">Bigger parties</h3>
-                        <p className="m-0 mt-2 text-sm leading-relaxed text-slate-600">
-                            Host a whole class instead of a group chat: 50 players, 50 questions, and far fewer repeats.
-                        </p>
-                    </Card>
-                </div>
+                {/* what's included */}
+                <section className="pt-18">
+                    <p className={`${EYEBROW} text-[var(--sd-violet-lbl)]`}>WHAT&rsquo;S INCLUDED</p>
+                    <h2 className="sd-display m-0 mt-3.5 text-3xl font-bold leading-tight tracking-[-0.02em] text-[var(--sd-text)] sm:text-4xl">
+                        Free and Premium, line by line.
+                    </h2>
+                    <p className="m-0 mt-3 max-w-[640px] text-base leading-relaxed text-[var(--sd-mut)]">
+                        Every row below is a real limit in the product — not a marketing bullet.
+                    </p>
 
-                <section className="mx-auto mt-12 max-w-5xl">
-                    <div className="mb-5 flex items-center gap-3">
-                        <div className="flex size-10 items-center justify-center rounded-2xl border border-[var(--sd-line2)] bg-[var(--sd-panel)] text-[var(--sd-text)]">
-                            <FileText className="size-5"/>
-                        </div>
-                        <div>
-                            <p className="m-0 text-xs font-black uppercase text-[var(--sd-violet-lbl)]">Billing notes</p>
-                            <h2 className="m-0 font-display text-2xl font-black text-[var(--sd-text)]">Simple answers before checkout</h2>
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                        {FAQS.map((faq) => (
-                            <Card key={faq.question} className="sat-arena-card p-5">
-                                <h3 className="m-0 text-base font-black text-slate-950">{faq.question}</h3>
-                                <p className="m-0 mt-2 text-sm leading-relaxed text-slate-600">{faq.answer}</p>
-                            </Card>
-                        ))}
-                    </div>
+                    <ComparisonTable/>
                 </section>
 
-                <p className="mx-auto mt-7 max-w-3xl text-center text-sm text-[var(--sd-dim)]">
-                    Already paid but not seeing Premium yet? Stripe can take a moment to confirm the subscription.
-                    You can also check your plan in <Link to="/settings" className="font-black text-[var(--sd-violet-lbl)]">settings</Link>.
-                </p>
+                {/* faq */}
+                <section className="pt-18">
+                    <p className={`${EYEBROW} text-[var(--sd-violet-lbl)]`}>BEFORE YOU PAY</p>
+                    <h2 className="sd-display m-0 mt-3.5 text-[32px] font-bold tracking-[-0.02em] text-[var(--sd-text)]">
+                        Common questions
+                    </h2>
+
+                    <div className="mt-7 grid gap-5 sm:grid-cols-2 sm:gap-x-12">
+                        {FAQS.map((faq) => (
+                            <div key={faq.question}>
+                                <p className="m-0 text-[15.5px] font-bold text-[var(--sd-text)]">{faq.question}</p>
+                                <p className="m-0 mt-2 text-[14.5px] leading-relaxed text-[var(--sd-mut)]">{faq.answer}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <p className="m-0 mt-7 text-[13px] text-[var(--sd-dim)]">
+                        Already paid but not seeing Premium yet? Stripe can take a moment to confirm the subscription.
+                        You can also check your plan in{' '}
+                        <Link to="/settings" className="font-bold text-[var(--sd-violet-lbl)]">settings</Link>.
+                    </p>
+                </section>
             </PageContainer>
 
-            <section className="relative overflow-hidden bg-slate-950 text-white">
-                <div className="sat-duel-lanes absolute inset-0 opacity-20"/>
-                <PageContainer className="relative py-12 text-center sm:py-16">
-                    <Trophy className="mx-auto mb-5 size-10 text-amber-300"/>
-                    <h2 className="m-0 font-display text-3xl font-black leading-tight sm:text-4xl">
-                        Start free. Upgrade if you hit the cap.
-                    </h2>
-                    <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-slate-300">
-                        Free stays free forever. Premium is for the days you want to practice past 25 questions.
-                    </p>
+            {/* closing */}
+            <section className="mt-18 border-t border-[var(--sd-line)] bg-[var(--sd-bg2)]">
+                <PageContainer className="flex flex-col gap-6 py-10 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+                    <div>
+                        <p className="sd-display m-0 text-[22px] font-bold tracking-[-0.01em] text-[var(--sd-text)]">
+                            Still deciding? Start free — it never expires.
+                        </p>
+                        <p className="m-0 mt-1.5 text-[14.5px] text-[var(--sd-mut)]">
+                            Upgrade the day you hit the 25-question cap, not before.
+                        </p>
+                    </div>
+                    <div className="flex shrink-0 gap-3">
+                        <Cta to={user ? '/trainer' : '/register'} className="px-[22px] py-3.5 text-[15px]">Practice free</Cta>
+                        {!isPremium && (user ? (
+                            <Cta solid onClick={handleUpgrade} loading={billingAction === 'checkout'} className="px-[22px] py-3.5 text-[15px]">
+                                Start Premium
+                            </Cta>
+                        ) : (
+                            <Cta solid to="/register" className="px-[22px] py-3.5 text-[15px]">
+                                Start Premium
+                            </Cta>
+                        ))}
+                    </div>
                 </PageContainer>
             </section>
         </div>
