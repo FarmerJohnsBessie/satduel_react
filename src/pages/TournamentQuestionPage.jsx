@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {AlertTriangle, ArrowLeft, Menu, X} from 'lucide-react';
 import {useAuth} from '../context/AuthContext';
-import {useNavigate, useParams} from 'react-router-dom';
+import {useNavigate, useParams, useSearchParams} from 'react-router-dom';
 import Question from '../components/Question';
 import Leaderboard from '../components/Tournament/TournamentLeaderboard';
 import TournamentInfo from '../components/Tournament/TournamentInfo';
@@ -82,7 +82,8 @@ function TournamentQuestionPage() {
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [participantInfo, setParticipantInfo] = useState(null);
     const [timeLeft, setTimeLeft] = useState(null);
-    const [isReadOnly, setIsReadOnly] = useState(false);
+    const [searchParams] = useSearchParams();
+    const isReadOnly = searchParams.get('readonly') === 'true';
     const [panelOpen, setPanelOpen] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [notice, setNotice] = useState(null);
@@ -138,11 +139,6 @@ function TournamentQuestionPage() {
             fetchLeaderboard();
         }
     }, [tournamentId, token, loading, fetchLeaderboard]);
-
-    useEffect(() => {
-        const searchParams = new URLSearchParams(window.location.search);
-        setIsReadOnly(searchParams.get('readonly') === 'true');
-    }, []);
 
     useEffect(() => {
         if (!participantInfo || isReadOnly) return undefined;
@@ -204,9 +200,15 @@ function TournamentQuestionPage() {
     };
 
     const answeredCount = questions.filter((question) => question.status !== 'Blank').length;
+    const correctCount = questions.filter((question) => question.status === 'Correct').length;
     const sidePanel = (
         <>
-            <TournamentInfo participantInfo={participantInfo} timeLeft={formatTime(timeLeft)}/>
+            <TournamentInfo
+                participantInfo={participantInfo}
+                timeLeft={formatTime(timeLeft)}
+                isReadOnly={isReadOnly}
+                score={correctCount}
+            />
             <Leaderboard
                 leaderboardData={leaderboardData}
                 tournamentStartTime={participantInfo?.start_time}
@@ -242,7 +244,9 @@ function TournamentQuestionPage() {
                                 {isReadOnly ? 'Review tournament' : participantInfo?.tournament?.name || 'Tournament'}
                             </h1>
                             <p className="m-0 mt-1 text-sm text-slate-500">
-                                {answeredCount}/{questions.length} answered. Leaderboard updates after each answer.
+                                {isReadOnly
+                                    ? `You scored ${correctCount}/${questions.length}. Every question below shows the correct answer.`
+                                    : `${answeredCount}/${questions.length} answered. Leaderboard updates after each answer.`}
                             </p>
                         </div>
                         <div className="flex flex-col gap-2 sm:flex-row">
@@ -256,8 +260,8 @@ function TournamentQuestionPage() {
                     </div>
                     <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
                         <div
-                            className="h-full rounded-full bg-primary-600 transition-all"
-                            style={{width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%`}}
+                            className={`h-full rounded-full transition-all ${isReadOnly ? 'bg-emerald-500' : 'bg-primary-600'}`}
+                            style={{width: `${questions.length ? ((isReadOnly ? correctCount : answeredCount) / questions.length) * 100 : 0}%`}}
                         />
                     </div>
                 </header>
@@ -271,7 +275,10 @@ function TournamentQuestionPage() {
                                 onSubmit={handleQuestionSubmit}
                                 status={question.status}
                                 questionNumber={i + 1}
+                                totalQuestions={questions.length}
                                 disabled={isReadOnly}
+                                reveal={isReadOnly}
+                                initialChoice={question.selected_choice || ''}
                             />
                         ))}
                     </main>

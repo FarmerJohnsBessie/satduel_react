@@ -35,22 +35,32 @@ function TournamentLeaderboard({leaderboardData = [], tournamentStartTime}) {
         return questionDuration <= duration ? question.status : 'Blank';
     };
 
+    // The server only sends the per-question grid to people in the round; for
+    // everyone else it sends the final score and an empty grid.
     const calculateScore = (participant, duration) => (
-        participant.tournament_questions.reduce((score, question) => (
-            getQuestionStatus(question, duration) === 'Correct' ? score + 1 : score
-        ), 0)
+        participant.tournament_questions.length
+            ? participant.tournament_questions.reduce((score, question) => (
+                getQuestionStatus(question, duration) === 'Correct' ? score + 1 : score
+            ), 0)
+            : participant.score || 0
     );
 
     const convertDurationToSeconds = (duration) => {
-        const [hours, minutes, seconds] = duration.split(':').map(Number);
-        return hours * 3600 + minutes * 60 + seconds;
+        if (!duration) return Infinity;
+        const [days, clock] = duration.includes(' ') ? duration.split(' ') : ['0', duration];
+        const [hours, minutes, seconds] = clock.split(':').map(Number);
+        return Number(days) * 86400 + hours * 3600 + minutes * 60 + seconds;
     };
 
     const getLastCorrectSubmission = (participant, duration) => {
         const correctQuestions = participant.tournament_questions.filter(
             (question) => getQuestionStatus(question, duration) === 'Correct'
         );
-        if (correctQuestions.length === 0) return Infinity;
+        if (correctQuestions.length === 0) {
+            return participant.last_correct_submission
+                ? convertDurationToSeconds(participant.last_correct_submission)
+                : Infinity;
+        }
         return Math.max(...correctQuestions.map((question) => convertDurationToSeconds(question.time_taken)));
     };
 
