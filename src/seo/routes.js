@@ -108,7 +108,7 @@ export const SEO_ROUTES = [
         key: 'about',
         path: '/about',
         title: 'About SAT Duel',
-        description: 'Meet the SAT Duel team and the mission behind a focused, competitive Digital SAT practice platform.',
+        description: 'The SAT is a solo test - prep does not have to be. Meet the four students building SAT Duel, and the duels, parties and ratings behind it.',
         image: '/og/default.png',
     },
     // Indexable but never shared, so they inherit the default card. Copy matches
