@@ -57,14 +57,38 @@ export const ENGLISH_STUDY_GUIDE_MODULES = [
         summary: 'Use context to choose precise language, explain what a sentence does, and connect authors without flattening their differences.',
         icon: BookOpenText,
         accent: 'bg-cyan-100 text-cyan-700',
-        comingSoon: true,
+        time: '2 hr 25 min',
         pages: [
-            {title: 'Vocabulary by Context and Prediction', focus: 'Use logic before definitions'},
-            {title: 'Precision, Connotation, and Register', focus: 'Separate near-synonyms by exact fit'},
-            {title: 'Sentence Function', focus: 'Name the role, not merely the topic'},
-            {title: 'Main Purpose and Text Structure', focus: 'Track the passage-wide plan'},
-            {title: 'Cross-Text Connections', focus: 'Compare agreement, response, and evidence'},
-            {title: '700+ Craft', focus: 'Qualification, concession, and subtle alignment'},
+            {
+                title: 'Vocabulary by Context and Prediction',
+                slug: 'vocabulary-by-context-and-prediction',
+                focus: 'Use sentence logic before definitions',
+            },
+            {
+                title: 'Precision, Connotation, and Register',
+                slug: 'precision-connotation-and-register',
+                focus: 'Separate near-synonyms by exact fit',
+            },
+            {
+                title: 'Sentence Function: Role, Not Topic',
+                slug: 'sentence-function-role-not-topic',
+                focus: 'Explain what a sentence does in the argument',
+            },
+            {
+                title: 'Main Purpose and Text Structure',
+                slug: 'main-purpose-and-text-structure',
+                focus: 'Track the passage-wide plan',
+            },
+            {
+                title: 'Cross-Text Connections',
+                slug: 'cross-text-connections',
+                focus: 'Compare agreement, response, and evidence',
+            },
+            {
+                title: '700+ Craft: Reading the Fine Print',
+                slug: 'advanced-craft-reading-the-fine-print',
+                focus: 'Resolve qualification, concession, and subtle alignment',
+            },
         ],
     },
     {
@@ -153,4 +177,3 @@ export const ENGLISH_STUDY_GUIDE_MODULES = [
         ],
     },
 ];
-

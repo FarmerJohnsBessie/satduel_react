@@ -51,12 +51,14 @@ The operating system for every later lesson. This module is complete in the firs
 
 College Board domain: Craft and Structure.
 
-1. Vocabulary by context and prediction
-2. Precision, connotation, and register
-3. Sentence function: role, not topic
-4. Main purpose and text structure
-5. Cross-text agreement and response
-6. 700+ craft: qualification, concession, and subtle alignment
+This module is complete in the second release. Its sequence moves from word-level logic to sentence- and passage-level rhetoric, then finishes with paired-text and 700+ precision work.
+
+1. **Vocabulary by Context and Prediction** — use sentence logic, clue architecture, and a plain-language prediction before judging choices.
+2. **Precision, Connotation, and Register** — separate near-synonyms by relationship, attitude, intensity, and academic fit.
+3. **Sentence Function: Role, Not Topic** — explain a sentence as content, connection, and contribution to the passage.
+4. **Main Purpose and Text Structure** — compress the passage into rhetorical moves and identify the author’s central action.
+5. **Cross-Text Connections** — model each author independently, then compare conclusion, explanation, evidence, or scope.
+6. **700+ Craft: Reading the Fine Print** — resolve qualification, concession, claim ownership, and partial alignment across mixed hard items.
 
 ### Module 3 — Main Ideas, Inferences, and Evidence
 
